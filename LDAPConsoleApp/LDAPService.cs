@@ -21,12 +21,6 @@ namespace LDAPConsoleApp
             _domainPath = LdapHelper.BuildLdapPath(_settings.Domain);
         }
 
-        public LDAPService(string domain = "APAC.bosch.com")
-        {
-            _domainPath = LdapHelper.BuildLdapPath(domain);
-            _settings = new LdapSettings { Domain = domain };
-        }
-
         public bool Connect()
         {
             try

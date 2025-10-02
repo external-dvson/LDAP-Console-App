@@ -35,22 +35,20 @@ namespace LDAPConsoleApp
         {
             try
             {
-                var deLdapService = new LDAPService();
-                
-                if (deLdapService.ConnectToSpecificDomainQuiet(domain))
+                if (_ldapService.ConnectToSpecificDomainQuiet(domain))
                 {
-                    var groupDetails = deLdapService.GetGroupDetails(groupName);
+                    var groupDetails = _ldapService.GetGroupDetails(groupName);
                     if (groupDetails != null)
                     {
-                        var members = deLdapService.GetGroupMembers(groupName);
-                        deLdapService.ShowGroupMembers(members);
+                        var members = _ldapService.GetGroupMembers(groupName);
+                        _ldapService.ShowGroupMembers(members);
                     }
                     else
                     {
                         DisplayHelper.DisplayGroupNotFoundInDomain(domain, groupName);
                     }
                     
-                    deLdapService.Disconnect();
+                    _ldapService.Disconnect();
                 }
                 else
                 {
@@ -67,17 +65,15 @@ namespace LDAPConsoleApp
         {
             try
             {
-                var deLdapService = new LDAPService();
-                
-                if (deLdapService.ConnectToSpecificDomainQuiet(domain))
+                if (_ldapService.ConnectToSpecificDomainQuiet(domain))
                 {
                     Console.WriteLine($"Searching for groups with prefix '{prefix}' in domain '{domain}'...");
-                    var groups = deLdapService.GetGroupsByPrefix(prefix, _settings.MaxGroupResults);
+                    var groups = _ldapService.GetGroupsByPrefix(prefix, _settings.MaxGroupResults);
                     
                     if (groups.Count > 0)
                     {
                         Console.WriteLine($"\nFound {groups.Count} groups with prefix '{prefix}':");
-                        deLdapService.ShowGroups(groups, _settings.MaxDisplayItems);
+                        _ldapService.ShowGroups(groups, _settings.MaxDisplayItems);
                         
                         // Show members for the first group as an example
                         if (groups.Count > 0)
@@ -87,8 +83,8 @@ namespace LDAPConsoleApp
                             if (!string.IsNullOrEmpty(firstGroupName))
                             {
                                 Console.WriteLine($"\n=== Example: Members of {firstGroupName} ===");
-                                var members = deLdapService.GetGroupMembers(firstGroupName);
-                                deLdapService.ShowGroupMembers(members);
+                                var members = _ldapService.GetGroupMembers(firstGroupName);
+                                _ldapService.ShowGroupMembers(members);
                             }
                         }
                     }
@@ -97,7 +93,7 @@ namespace LDAPConsoleApp
                         Console.WriteLine($"No groups found with prefix '{prefix}' in domain '{domain}'");
                     }
                     
-                    deLdapService.Disconnect();
+                    _ldapService.Disconnect();
                 }
                 else
                 {
