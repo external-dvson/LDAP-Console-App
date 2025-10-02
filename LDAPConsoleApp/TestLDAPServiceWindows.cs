@@ -1,50 +1,112 @@
 using System;
-using System.Linq;
+using Microsoft.Extensions.Options;
+using LDAPConsoleApp.Interfaces;
+using LDAPConsoleApp.Configuration;
+using LDAPConsoleApp.Helpers;
 
 namespace LDAPConsoleApp
 {
-    public static class LDAPTest
+    public class LDAPTest
     {
-        public static void RunTest()
-        {
-            var ldapService = new LDAPService();
+        private readonly ILdapService _ldapService;
+        private readonly LdapSettings _settings;
 
-            // Test DE domain for the specific group
-            TestDEDomainGroup(ldapService, "IdM2BCD_FCMCONSOLE_TRANSPORT_ADMIN");
+        public LDAPTest(ILdapService ldapService, IOptions<LdapSettings> settings)
+        {
+            _ldapService = ldapService;
+            _settings = settings.Value;
         }
 
-        public static void TestDEDomainGroup(LDAPService ldapService, string groupName)
+        public void RunTest()
+        {
+            // Test individual groups from configuration
+            foreach (var groupName in _settings.GroupNames)
+            {
+                Console.WriteLine($"\n=== Testing Individual Group: {groupName} ===");
+                TestDomainGroup(_settings.SecondaryDomain, groupName);
+            }
+
+            // Test groups by prefix to discover all FCMConsole groups
+            Console.WriteLine($"\n=== Testing Groups by Prefix: {_settings.GroupPrefix} ===");
+            TestGroupsByPrefix(_settings.SecondaryDomain, _settings.GroupPrefix);
+        }
+
+        public void TestDomainGroup(string domain, string groupName)
         {
             try
             {
-                // Create a new LDAP service instance for DE domain
                 var deLdapService = new LDAPService();
                 
-                if (deLdapService.ConnectToSpecificDomainQuiet("DE.bosch.com"))
+                if (deLdapService.ConnectToSpecificDomainQuiet(domain))
                 {
-                    // Test the specific group
                     var groupDetails = deLdapService.GetGroupDetails(groupName);
                     if (groupDetails != null)
                     {
-                        // Get group members
                         var members = deLdapService.GetGroupMembers(groupName);
                         deLdapService.ShowGroupMembers(members);
                     }
                     else
                     {
-                        Console.WriteLine($"❌ Group not found in DE domain: {groupName}");
+                        DisplayHelper.DisplayGroupNotFoundInDomain(domain, groupName);
                     }
                     
                     deLdapService.Disconnect();
                 }
                 else
                 {
-                    Console.WriteLine("❌ Could not connect to DE domain");
+                    DisplayHelper.DisplayCouldNotConnectToDomain(domain);
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error testing DE domain: {ex.Message}");
+                DisplayHelper.DisplayDomainTestError(domain, ex.Message);
+            }
+        }
+
+        public void TestGroupsByPrefix(string domain, string prefix)
+        {
+            try
+            {
+                var deLdapService = new LDAPService();
+                
+                if (deLdapService.ConnectToSpecificDomainQuiet(domain))
+                {
+                    Console.WriteLine($"Searching for groups with prefix '{prefix}' in domain '{domain}'...");
+                    var groups = deLdapService.GetGroupsByPrefix(prefix, _settings.MaxGroupResults);
+                    
+                    if (groups.Count > 0)
+                    {
+                        Console.WriteLine($"\nFound {groups.Count} groups with prefix '{prefix}':");
+                        deLdapService.ShowGroups(groups, _settings.MaxDisplayItems);
+                        
+                        // Show members for the first group as an example
+                        if (groups.Count > 0)
+                        {
+                            var firstGroup = groups[0];
+                            var firstGroupName = firstGroup.GetValueOrDefault(CommonConstant.LdapProperties.CommonName)?.ToString();
+                            if (!string.IsNullOrEmpty(firstGroupName))
+                            {
+                                Console.WriteLine($"\n=== Example: Members of {firstGroupName} ===");
+                                var members = deLdapService.GetGroupMembers(firstGroupName);
+                                deLdapService.ShowGroupMembers(members);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"No groups found with prefix '{prefix}' in domain '{domain}'");
+                    }
+                    
+                    deLdapService.Disconnect();
+                }
+                else
+                {
+                    DisplayHelper.DisplayCouldNotConnectToDomain(domain);
+                }
+            }
+            catch (Exception ex)
+            {
+                DisplayHelper.DisplayDomainTestError(domain, ex.Message);
             }
         }
     }

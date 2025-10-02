@@ -2,38 +2,45 @@ using System;
 using System.Collections.Generic;
 using System.DirectoryServices;
 using System.Linq;
+using LDAPConsoleApp.Interfaces;
+using LDAPConsoleApp.Helpers;
+using LDAPConsoleApp.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace LDAPConsoleApp
 {
-    public class LDAPService
+    public class LDAPService : ILdapService, IDisposable
     {
         private readonly string _domainPath;
+        private readonly LdapSettings _settings;
         private DirectoryEntry? _directoryEntry;
+
+        public LDAPService(IOptions<LdapSettings> settings)
+        {
+            _settings = settings.Value;
+            _domainPath = LdapHelper.BuildLdapPath(_settings.Domain);
+        }
 
         public LDAPService(string domain = "APAC.bosch.com")
         {
-            _domainPath = $"LDAP://{domain}";
+            _domainPath = LdapHelper.BuildLdapPath(domain);
+            _settings = new LdapSettings { Domain = domain };
         }
 
         public bool Connect()
         {
             try
             {
-                // Sử dụng Windows Authentication (current user credentials)
                 _directoryEntry = new DirectoryEntry(_domainPath);
-                
-                // Test connection bằng cách truy cập một property
                 var name = _directoryEntry.Name;
                 
-                Console.WriteLine($"✅ Connected to: {_directoryEntry.Path}");
-                Console.WriteLine($"   Name: {_directoryEntry.Name}");
-                Console.WriteLine($"   Schema: {_directoryEntry.SchemaClassName}");
+                DisplayHelper.DisplayConnectionSuccess(_directoryEntry.Path, _directoryEntry.Name, _directoryEntry.SchemaClassName);
                 
                 return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Connection failed: {ex.Message}");
+                DisplayHelper.DisplayConnectionFailure(ex.Message);
                 return false;
             }
         }
@@ -42,31 +49,20 @@ namespace LDAPConsoleApp
         {
             try
             {
-                // Dispose existing connection if any
-                if (_directoryEntry != null)
-                {
-                    _directoryEntry.Dispose();
-                    _directoryEntry = null;
-                }
+                DisposeExistingConnection();
 
-                // Create LDAP path for specific domain
-                string domainPath = domain.StartsWith("LDAP://") ? domain : $"LDAP://{domain}";
-                
-                // Sử dụng Windows Authentication (current user credentials)
+                string domainPath = LdapHelper.BuildLdapPath(domain);
                 _directoryEntry = new DirectoryEntry(domainPath);
                 
-                // Test connection bằng cách truy cập một property
                 var name = _directoryEntry.Name;
                 
-                Console.WriteLine($"✅ Connected to: {_directoryEntry.Path}");
-                Console.WriteLine($"   Name: {_directoryEntry.Name}");
-                Console.WriteLine($"   Schema: {_directoryEntry.SchemaClassName}");
+                DisplayHelper.DisplayConnectionSuccess(_directoryEntry.Path, _directoryEntry.Name, _directoryEntry.SchemaClassName);
                 
                 return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Connection to {domain} failed: {ex.Message}");
+                DisplayHelper.DisplaySpecificDomainConnectionFailure(domain, ex.Message);
                 return false;
             }
         }
@@ -75,20 +71,11 @@ namespace LDAPConsoleApp
         {
             try
             {
-                // Dispose existing connection if any
-                if (_directoryEntry != null)
-                {
-                    _directoryEntry.Dispose();
-                    _directoryEntry = null;
-                }
+                DisposeExistingConnection();
 
-                // Create LDAP path for specific domain
-                string domainPath = domain.StartsWith("LDAP://") ? domain : $"LDAP://{domain}";
-                
-                // Sử dụng Windows Authentication (current user credentials)
+                string domainPath = LdapHelper.BuildLdapPath(domain);
                 _directoryEntry = new DirectoryEntry(domainPath);
                 
-                // Test connection bằng cách truy cập một property (silent)
                 var name = _directoryEntry.Name;
                 
                 return true;
@@ -105,57 +92,37 @@ namespace LDAPConsoleApp
             
             if (_directoryEntry == null)
             {
-                Console.WriteLine("❌ Not connected to LDAP server");
+                DisplayHelper.DisplayNotConnectedError();
                 return groups;
             }
 
             try
             {
                 using var searcher = new DirectorySearcher(_directoryEntry);
-                searcher.Filter = "(objectClass=group)";
-                searcher.PropertiesToLoad.Add("cn");
-                searcher.PropertiesToLoad.Add("distinguishedName");
-                searcher.PropertiesToLoad.Add("description");
-                searcher.PropertiesToLoad.Add("displayName");
-                searcher.PropertiesToLoad.Add("member");
-                searcher.SizeLimit = maxResults;
+                var properties = new[] { 
+                    CommonConstant.LdapProperties.CommonName,
+                    CommonConstant.LdapProperties.DistinguishedName,
+                    CommonConstant.LdapProperties.Description,
+                    CommonConstant.LdapProperties.DisplayName,
+                    CommonConstant.LdapProperties.Member
+                };
+
+                LdapHelper.SetupDirectorySearcher(searcher, CommonConstant.LdapFilters.GroupObjectClass, properties, maxResults);
 
                 var results = searcher.FindAll();
                 
                 foreach (SearchResult result in results)
                 {
-                    var group = new Dictionary<string, object?>();
-                    
-                    foreach (string propertyName in searcher.PropertiesToLoad)
-                    {
-                        if (result.Properties[propertyName].Count > 0)
-                        {
-                            if (result.Properties[propertyName].Count == 1)
-                            {
-                                group[propertyName] = result.Properties[propertyName][0];
-                            }
-                            else
-                            {
-                                // Multiple values - convert to array
-                                var values = new object[result.Properties[propertyName].Count];
-                                for (int i = 0; i < result.Properties[propertyName].Count; i++)
-                                {
-                                    values[i] = result.Properties[propertyName][i];
-                                }
-                                group[propertyName] = values;
-                            }
-                        }
-                    }
-                    
+                    var group = LdapHelper.CreatePropertyDictionary(result, properties);
                     groups.Add(group);
                 }
                 
-                Console.WriteLine($"✅ Found {groups.Count} groups");
+                DisplayHelper.DisplayGroupsFound(groups.Count);
                 return groups;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error searching groups: {ex.Message}");
+                DisplayHelper.DisplayError("searching groups", ex.Message);
                 return groups;
             }
         }
@@ -166,56 +133,80 @@ namespace LDAPConsoleApp
             
             if (_directoryEntry == null)
             {
-                Console.WriteLine("❌ Not connected to LDAP server");
+                DisplayHelper.DisplayNotConnectedError();
                 return groups;
             }
 
             try
             {
                 using var searcher = new DirectorySearcher(_directoryEntry);
-                searcher.Filter = $"(&(objectClass=group)(cn={searchPattern}))";
-                searcher.PropertiesToLoad.Add("cn");
-                searcher.PropertiesToLoad.Add("distinguishedName");
-                searcher.PropertiesToLoad.Add("description");
-                searcher.PropertiesToLoad.Add("displayName");
-                searcher.PropertiesToLoad.Add("member");
-                searcher.SizeLimit = maxResults;
+                var properties = new[] { 
+                    CommonConstant.LdapProperties.CommonName,
+                    CommonConstant.LdapProperties.DistinguishedName,
+                    CommonConstant.LdapProperties.Description,
+                    CommonConstant.LdapProperties.DisplayName,
+                    CommonConstant.LdapProperties.Member
+                };
+
+                var filter = string.Format(CommonConstant.LdapFilters.GroupByName, searchPattern);
+                LdapHelper.SetupDirectorySearcher(searcher, filter, properties, maxResults);
 
                 var results = searcher.FindAll();
                 
                 foreach (SearchResult result in results)
                 {
-                    var group = new Dictionary<string, object?>();
-                    
-                    foreach (string propertyName in searcher.PropertiesToLoad)
-                    {
-                        if (result.Properties[propertyName].Count > 0)
-                        {
-                            if (result.Properties[propertyName].Count == 1)
-                            {
-                                group[propertyName] = result.Properties[propertyName][0];
-                            }
-                            else
-                            {
-                                var values = new object[result.Properties[propertyName].Count];
-                                for (int i = 0; i < result.Properties[propertyName].Count; i++)
-                                {
-                                    values[i] = result.Properties[propertyName][i];
-                                }
-                                group[propertyName] = values;
-                            }
-                        }
-                    }
-                    
+                    var group = LdapHelper.CreatePropertyDictionary(result, properties);
                     groups.Add(group);
                 }
                 
-                Console.WriteLine($"✅ Found {groups.Count} groups matching '{searchPattern}'");
+                DisplayHelper.DisplayGroupsFoundWithPattern(groups.Count, searchPattern);
                 return groups;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error searching groups by name: {ex.Message}");
+                DisplayHelper.DisplayError("searching groups by name", ex.Message);
+                return groups;
+            }
+        }
+
+        public List<Dictionary<string, object?>> GetGroupsByPrefix(string prefix, int maxResults = 50)
+        {
+            var groups = new List<Dictionary<string, object?>>();
+            
+            if (_directoryEntry == null)
+            {
+                DisplayHelper.DisplayNotConnectedError();
+                return groups;
+            }
+
+            try
+            {
+                using var searcher = new DirectorySearcher(_directoryEntry);
+                var properties = new[] { 
+                    CommonConstant.LdapProperties.CommonName,
+                    CommonConstant.LdapProperties.DistinguishedName,
+                    CommonConstant.LdapProperties.Description,
+                    CommonConstant.LdapProperties.DisplayName,
+                    CommonConstant.LdapProperties.Member
+                };
+
+                var filter = string.Format(CommonConstant.LdapFilters.GroupByPrefix, prefix);
+                LdapHelper.SetupDirectorySearcher(searcher, filter, properties, maxResults);
+
+                var results = searcher.FindAll();
+                
+                foreach (SearchResult result in results)
+                {
+                    var group = LdapHelper.CreatePropertyDictionary(result, properties);
+                    groups.Add(group);
+                }
+                
+                DisplayHelper.DisplayGroupsFoundWithPattern(groups.Count, $"{prefix}*");
+                return groups;
+            }
+            catch (Exception ex)
+            {
+                DisplayHelper.DisplayError("searching groups by prefix", ex.Message);
                 return groups;
             }
         }
@@ -226,20 +217,23 @@ namespace LDAPConsoleApp
             
             if (_directoryEntry == null)
             {
-                Console.WriteLine("❌ Not connected to LDAP server");
+                DisplayHelper.DisplayNotConnectedError();
                 return users;
             }
 
             try
             {
                 using var searcher = new DirectorySearcher(_directoryEntry);
-                searcher.Filter = $"(&(objectClass=user)(objectCategory=person)(|(cn={searchPattern})(sAMAccountName={searchPattern})(displayName={searchPattern})))";
-                searcher.PropertiesToLoad.Add("cn");
-                searcher.PropertiesToLoad.Add("sAMAccountName");
-                searcher.PropertiesToLoad.Add("displayName");
-                searcher.PropertiesToLoad.Add("distinguishedName");
-                searcher.PropertiesToLoad.Add("mail");
-                searcher.SizeLimit = maxResults;
+                var properties = new[] { 
+                    CommonConstant.LdapProperties.CommonName,
+                    CommonConstant.LdapProperties.SamAccountName,
+                    CommonConstant.LdapProperties.DisplayName,
+                    CommonConstant.LdapProperties.DistinguishedName,
+                    CommonConstant.LdapProperties.Mail
+                };
+
+                var filter = string.Format(CommonConstant.LdapFilters.UserSearch, searchPattern);
+                LdapHelper.SetupDirectorySearcher(searcher, filter, properties, maxResults);
 
                 var results = searcher.FindAll();
                 
@@ -247,7 +241,7 @@ namespace LDAPConsoleApp
                 {
                     var user = new Dictionary<string, object?>();
                     
-                    foreach (string propertyName in searcher.PropertiesToLoad)
+                    foreach (string propertyName in properties)
                     {
                         if (result.Properties[propertyName].Count > 0)
                         {
@@ -258,119 +252,60 @@ namespace LDAPConsoleApp
                     users.Add(user);
                 }
                 
-                Console.WriteLine($"✅ Found {users.Count} users matching '{searchPattern}'");
+                DisplayHelper.DisplayUsersFoundWithPattern(users.Count, searchPattern);
                 return users;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error searching users: {ex.Message}");
+                DisplayHelper.DisplayError("searching users", ex.Message);
                 return users;
             }
         }
 
         public void ShowGroups(List<Dictionary<string, object?>> groups, int maxDisplay = 10)
         {
-            if (!groups.Any())
-            {
-                Console.WriteLine("❌ No groups to display");
-                return;
-            }
-
-            Console.WriteLine($"\n📋 Displaying {Math.Min(groups.Count, maxDisplay)} groups:");
-            
-            foreach (var group in groups.Take(maxDisplay))
-            {
-                var cn = group.GetValueOrDefault("cn", "N/A")?.ToString() ?? "N/A";
-                var description = group.GetValueOrDefault("description", "")?.ToString() ?? "";
-                
-                Console.WriteLine($"  📂 {cn}");
-                
-                if (!string.IsNullOrEmpty(description))
-                {
-                    Console.WriteLine($"     📝 {description}");
-                }
-                
-                // Show member count if available
-                if (group.ContainsKey("member"))
-                {
-                    var members = group["member"];
-                    if (members is object[] memberArray)
-                    {
-                        Console.WriteLine($"     👤 Members: {memberArray.Length}");
-                    }
-                    else if (members != null)
-                    {
-                        Console.WriteLine($"     👤 Members: 1");
-                    }
-                }
-                
-                Console.WriteLine();
-            }
-            
-            if (groups.Count > maxDisplay)
-            {
-                Console.WriteLine($"  ... và {groups.Count - maxDisplay} groups khác");
-            }
+            DisplayHelper.DisplayGroups(groups, maxDisplay);
         }
 
         public Dictionary<string, object?>? GetGroupDetails(string groupName)
         {
             if (_directoryEntry == null)
             {
-                Console.WriteLine("❌ Not connected to LDAP server");
+                DisplayHelper.DisplayNotConnectedError();
                 return null;
             }
 
             try
             {
                 using var searcher = new DirectorySearcher(_directoryEntry);
-                searcher.Filter = $"(&(objectClass=group)(cn={groupName}))";
-                searcher.PropertiesToLoad.Add("cn");
-                searcher.PropertiesToLoad.Add("distinguishedName");
-                searcher.PropertiesToLoad.Add("description");
-                searcher.PropertiesToLoad.Add("displayName");
-                searcher.PropertiesToLoad.Add("member");
-                searcher.PropertiesToLoad.Add("memberOf");
-                searcher.PropertiesToLoad.Add("groupType");
-                searcher.SizeLimit = 1;
+                var properties = new[] { 
+                    CommonConstant.LdapProperties.CommonName,
+                    CommonConstant.LdapProperties.DistinguishedName,
+                    CommonConstant.LdapProperties.Description,
+                    CommonConstant.LdapProperties.DisplayName,
+                    CommonConstant.LdapProperties.Member,
+                    CommonConstant.LdapProperties.MemberOf,
+                    CommonConstant.LdapProperties.GroupType
+                };
+
+                var filter = string.Format(CommonConstant.LdapFilters.GroupByName, groupName);
+                LdapHelper.SetupDirectorySearcher(searcher, filter, properties, 1);
 
                 var result = searcher.FindOne();
                 
                 if (result != null)
                 {
-                    var group = new Dictionary<string, object?>();
-                    
-                    foreach (string propertyName in searcher.PropertiesToLoad)
-                    {
-                        if (result.Properties[propertyName].Count > 0)
-                        {
-                            if (result.Properties[propertyName].Count == 1)
-                            {
-                                group[propertyName] = result.Properties[propertyName][0];
-                            }
-                            else
-                            {
-                                var values = new object[result.Properties[propertyName].Count];
-                                for (int i = 0; i < result.Properties[propertyName].Count; i++)
-                                {
-                                    values[i] = result.Properties[propertyName][i];
-                                }
-                                group[propertyName] = values;
-                            }
-                        }
-                    }
-                    
-                    return group;
+                    return LdapHelper.CreatePropertyDictionary(result, properties);
                 }
                 else
                 {
-                    Console.WriteLine($"❌ Group not found: {groupName}");
+                    Console.WriteLine(string.Format(CommonConstant.Messages.GroupNotFound, groupName));
                     return null;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error getting group details: {ex.Message}");
+                DisplayHelper.DisplayError("getting group details", ex.Message);
                 return null;
             }
         }
@@ -380,27 +315,15 @@ namespace LDAPConsoleApp
             var members = new List<Dictionary<string, object?>>();
             
             var groupDetails = GetGroupDetails(groupName);
-            if (groupDetails == null || !groupDetails.ContainsKey("member"))
+            if (groupDetails == null || !groupDetails.ContainsKey(CommonConstant.LdapProperties.Member))
             {
-                Console.WriteLine($"❌ No members found in group: {groupName}");
+                Console.WriteLine(string.Format(CommonConstant.Messages.NoMembersFoundInGroup, groupName));
                 return members;
             }
 
             try
             {
-                var memberDNs = new List<string>();
-                
-                if (groupDetails["member"] is object[] memberArray)
-                {
-                    foreach (var memberDN in memberArray)
-                    {
-                        memberDNs.Add(memberDN.ToString() ?? "");
-                    }
-                }
-                else if (groupDetails["member"] is string singleMember)
-                {
-                    memberDNs.Add(singleMember);
-                }
+                var memberDNs = LdapHelper.ExtractMemberDistinguishedNames(groupDetails[CommonConstant.LdapProperties.Member]);
 
                 foreach (var memberDN in memberDNs)
                 {
@@ -408,35 +331,13 @@ namespace LDAPConsoleApp
 
                     try
                     {
-                        using var memberEntry = new DirectoryEntry($"LDAP://{memberDN}");
-                        var member = new Dictionary<string, object?>();
-                        
-                        // Get user properties
-                        if (memberEntry.Properties.Contains("cn"))
-                            member["cn"] = memberEntry.Properties["cn"].Value;
-                        if (memberEntry.Properties.Contains("sAMAccountName"))
-                            member["sAMAccountName"] = memberEntry.Properties["sAMAccountName"].Value;
-                        if (memberEntry.Properties.Contains("displayName"))
-                            member["displayName"] = memberEntry.Properties["displayName"].Value;
-                        if (memberEntry.Properties.Contains("mail"))
-                            member["mail"] = memberEntry.Properties["mail"].Value;
-                        if (memberEntry.Properties.Contains("title"))
-                            member["title"] = memberEntry.Properties["title"].Value;
-                        if (memberEntry.Properties.Contains("department"))
-                            member["department"] = memberEntry.Properties["department"].Value;
-                        
-                        member["distinguishedName"] = memberDN;
+                        var member = GetMemberDetails(memberDN);
                         members.Add(member);
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"⚠️ Could not get details for member: {memberDN} - {ex.Message}");
-                        // Add basic info even if we can't get full details
-                        members.Add(new Dictionary<string, object?> 
-                        { 
-                            ["distinguishedName"] = memberDN,
-                            ["cn"] = ExtractCNFromDN(memberDN)
-                        });
+                        Console.WriteLine(string.Format(CommonConstant.Messages.CouldNotGetMemberDetails, memberDN, ex.Message));
+                        members.Add(CreateBasicMemberInfo(memberDN));
                     }
                 }
 
@@ -444,125 +345,19 @@ namespace LDAPConsoleApp
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error getting group members: {ex.Message}");
+                DisplayHelper.DisplayError("getting group members", ex.Message);
                 return members;
             }
         }
 
-        private string ExtractCNFromDN(string distinguishedName)
-        {
-            if (string.IsNullOrEmpty(distinguishedName)) return "Unknown";
-            
-            var cnIndex = distinguishedName.IndexOf("CN=", StringComparison.OrdinalIgnoreCase);
-            if (cnIndex >= 0)
-            {
-                var start = cnIndex + 3;
-                var end = distinguishedName.IndexOf(',', start);
-                if (end > start)
-                {
-                    return distinguishedName.Substring(start, end - start);
-                }
-                else
-                {
-                    return distinguishedName.Substring(start);
-                }
-            }
-            
-            return "Unknown";
-        }
-
         public void ShowGroupDetails(Dictionary<string, object?> group)
         {
-            if (group == null)
-            {
-                Console.WriteLine("❌ No group details to display");
-                return;
-            }
-
-            var cn = group.GetValueOrDefault("cn", "N/A")?.ToString() ?? "N/A";
-            var dn = group.GetValueOrDefault("distinguishedName", "")?.ToString() ?? "";
-            var description = group.GetValueOrDefault("description", "")?.ToString() ?? "";
-            var displayName = group.GetValueOrDefault("displayName", "")?.ToString() ?? "";
-            
-            Console.WriteLine($"\n📂 Group Details: {cn}");
-            Console.WriteLine($"   🔗 Distinguished Name: {dn}");
-            
-            if (!string.IsNullOrEmpty(displayName) && displayName != cn)
-            {
-                Console.WriteLine($"   📛 Display Name: {displayName}");
-            }
-            
-            if (!string.IsNullOrEmpty(description))
-            {
-                Console.WriteLine($"   📝 Description: {description}");
-            }
-
-            if (group.ContainsKey("member"))
-            {
-                var members = group["member"];
-                if (members is object[] memberArray)
-                {
-                    Console.WriteLine($"   👥 Total Members: {memberArray.Length}");
-                }
-                else if (members != null)
-                {
-                    Console.WriteLine($"   👥 Total Members: 1");
-                }
-            }
-            else
-            {
-                Console.WriteLine($"   👥 Total Members: 0");
-            }
+            DisplayHelper.DisplayGroupDetails(group);
         }
 
         public void ShowGroupMembers(List<Dictionary<string, object?>> members)
         {
-            if (!members.Any())
-            {
-                Console.WriteLine("❌ No members to display");
-                return;
-            }
-
-            Console.WriteLine($"\n👥 Group Members ({members.Count}):");
-            
-            foreach (var member in members)
-            {
-                var cn = member.GetValueOrDefault("cn", "N/A")?.ToString() ?? "N/A";
-                var sAMAccountName = member.GetValueOrDefault("sAMAccountName", "")?.ToString() ?? "";
-                var displayName = member.GetValueOrDefault("displayName", "")?.ToString() ?? "";
-                var mail = member.GetValueOrDefault("mail", "")?.ToString() ?? "";
-                var title = member.GetValueOrDefault("title", "")?.ToString() ?? "";
-                var department = member.GetValueOrDefault("department", "")?.ToString() ?? "";
-                
-                Console.WriteLine($"  👤 {cn}");
-                
-                if (!string.IsNullOrEmpty(sAMAccountName))
-                {
-                    Console.WriteLine($"     🆔 Username: {sAMAccountName}");
-                }
-                
-                if (!string.IsNullOrEmpty(displayName) && displayName != cn)
-                {
-                    Console.WriteLine($"     📛 Display Name: {displayName}");
-                }
-                
-                if (!string.IsNullOrEmpty(mail))
-                {
-                    Console.WriteLine($"     📧 Email: {mail}");
-                }
-                
-                if (!string.IsNullOrEmpty(title))
-                {
-                    Console.WriteLine($"     💼 Title: {title}");
-                }
-                
-                if (!string.IsNullOrEmpty(department))
-                {
-                    Console.WriteLine($"     🏢 Department: {department}");
-                }
-                
-                Console.WriteLine();
-            }
+            DisplayHelper.DisplayGroupMembers(members);
         }
 
         public void Disconnect()
@@ -574,6 +369,48 @@ namespace LDAPConsoleApp
         public void Dispose()
         {
             Disconnect();
+        }
+
+        private void DisposeExistingConnection()
+        {
+            if (_directoryEntry != null)
+            {
+                _directoryEntry.Dispose();
+                _directoryEntry = null;
+            }
+        }
+
+        private Dictionary<string, object?> GetMemberDetails(string memberDN)
+        {
+            using var memberEntry = new DirectoryEntry($"{CommonConstant.LdapSchemes.LdapPrefix}{memberDN}");
+            var member = new Dictionary<string, object?>();
+            
+            var properties = new[] {
+                CommonConstant.LdapProperties.CommonName,
+                CommonConstant.LdapProperties.SamAccountName,
+                CommonConstant.LdapProperties.DisplayName,
+                CommonConstant.LdapProperties.Mail,
+                CommonConstant.LdapProperties.Title,
+                CommonConstant.LdapProperties.Department
+            };
+
+            foreach (var property in properties)
+            {
+                if (memberEntry.Properties.Contains(property))
+                    member[property] = memberEntry.Properties[property].Value;
+            }
+            
+            member[CommonConstant.LdapProperties.DistinguishedName] = memberDN;
+            return member;
+        }
+
+        private Dictionary<string, object?> CreateBasicMemberInfo(string memberDN)
+        {
+            return new Dictionary<string, object?> 
+            { 
+                [CommonConstant.LdapProperties.DistinguishedName] = memberDN,
+                [CommonConstant.LdapProperties.CommonName] = LdapHelper.ExtractCommonNameFromDistinguishedName(memberDN)
+            };
         }
     }
 }
