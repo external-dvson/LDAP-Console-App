@@ -7,7 +7,7 @@ using LDAPConsoleApp.Helpers;
 using LDAPConsoleApp.Configuration;
 using Microsoft.Extensions.Options;
 
-namespace LDAPConsoleApp
+namespace LDAPConsoleApp.Services
 {
     public class LDAPService : ILdapService, IDisposable
     {
