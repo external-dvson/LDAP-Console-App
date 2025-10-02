@@ -1,21 +1,34 @@
-# 🔍 LDAP Console Application
+# 🔍 LDAP Console Application & Client Console App
 
-A modern, well-structured LDAP query tool designed for Active Directory operations with Windows Authentication.
+A modern, well-structured LDAP query tool designed for Active Directory operations with Windows Authentication and an independent Azure Service Bus consumer application.
 
 ## 📋 **Project Overview**
 
-This application connects to Active Directory to query groups and retrieve detailed member information. The codebase has been refactored following modern .NET practices and SOLID principles.
+This solution contains two applications:
+1. **LDAPConsoleApp** - Connects to Active Directory to query groups and send data to Azure Service Bus
+2. **ClientConsoleApp** - Independent consumer that receives and processes LDAP data from Azure Service Bus
+
+The codebase has been refactored following modern .NET practices and SOLID principles.
 
 ## ✨ **Features**
 
+### **LDAP Console App:**
 - ✅ **Windows Authentication** - Uses current user credentials
 - ✅ **Cross-domain Support** - Configurable AD domains (APAC, DE, etc.)
 - ✅ **Group Member Details** - Retrieves comprehensive user information
+- ✅ **Azure Service Bus Integration** - Send LDAP data to Azure Service Bus queue
+
+### **Client Console App:**
+- ✅ **Azure Service Bus Consumer** - Receives LDAP data from queue
+- ✅ **Cloud-Ready** - Designed for Azure deployment
+- ✅ **Real-time Processing** - Processes messages as they arrive
+- ✅ **Independent Deployment** - No LDAP dependencies
+
+### **Common Features:**
 - ✅ **Clean Architecture** - SOLID principles implementation
 - ✅ **Configuration Management** - Options pattern with appsettings.json
 - ✅ **Dependency Injection** - Modern .NET DI container
 - ✅ **Error Handling** - Comprehensive exception management
-- ✅ **Azure Service Bus Integration** - Send LDAP data to Azure Service Bus queue
 - ✅ **Group/User Data Models** - Structured data models for group and user information
 
 ## 🏗️ **Architecture & Design Principles**
@@ -34,32 +47,50 @@ This application connects to Active Directory to query groups and retrieve detai
 ## 📂 **Project Structure**
 
 ```
-LDAPConsoleApp/
-├── Program.cs                    # Application entry point with DI setup
-├── CommonConstant.cs             # Centralized constants and messages
-├── Configuration/
-│   └── LdapSettings.cs          # Configuration model (LDAP + Service Bus)
-├── Interfaces/
-│   ├── ILdapService.cs          # LDAP service contract
-│   ├── IServiceBusService.cs    # Service Bus service contract
-│   └── ILdapServiceBusOrchestrator.cs  # Orchestrator contract
-├── Models/
-│   ├── Group.cs                 # Group data model (GroupName + Users)
-│   └── User.cs                  # User data model (DomainId)
-├── Services/
-│   ├── ServiceBusService.cs     # Azure Service Bus implementation
-│   └── LdapServiceBusOrchestrator.cs  # LDAP to Service Bus orchestration
-├── Helpers/
-│   ├── LdapHelper.cs            # LDAP utility functions
-│   └── DisplayHelper.cs         # UI display utilities
-├── LDAPService.cs               # Core LDAP operations implementation
-├── TestLDAPServiceWindows.cs    # Test execution logic
-└── appsettings.json             # Application configuration
+LDAP-Console-App/
+├── LDAPConsoleApp/                  # LDAP Console Application
+│   ├── Program.cs                   # Application entry point with DI setup
+│   ├── CommonConstant.cs            # Centralized constants and messages
+│   ├── Configuration/
+│   │   └── LdapSettings.cs         # Configuration model (LDAP + Service Bus)
+│   ├── Interfaces/
+│   │   ├── ILdapService.cs         # LDAP service contract
+│   │   ├── IServiceBusService.cs   # Service Bus service contract
+│   │   └── ILdapServiceBusOrchestrator.cs  # Orchestrator contract
+│   ├── Models/
+│   │   ├── Group.cs                # Group data model (GroupName + Users)
+│   │   └── User.cs                 # User data model (DomainId)
+│   ├── Services/
+│   │   ├── ServiceBusService.cs    # Azure Service Bus implementation
+│   │   └── LdapServiceBusOrchestrator.cs  # LDAP to Service Bus orchestration
+│   ├── Helpers/
+│   │   ├── LdapHelper.cs           # LDAP utility functions
+│   │   └── DisplayHelper.cs        # UI display utilities
+│   ├── LDAPService.cs              # Core LDAP operations implementation
+│   ├── TestLDAPServiceWindows.cs   # Test execution logic
+│   └── appsettings.json            # Application configuration
+├── ClientConsoleApp/               # Client Console Application (NEW)
+│   ├── Program.cs                  # Consumer app entry point
+│   ├── AppConstant.cs              # Application constants
+│   ├── Configuration/
+│   │   └── Settings.cs             # Service Bus and app settings
+│   ├── Interfaces/
+│   │   └── IServiceBusConsumerService.cs  # Consumer service contract
+│   ├── Models/
+│   │   ├── Group.cs                # Group data model (same as LDAP app)
+│   │   └── User.cs                 # User data model (same as LDAP app)
+│   ├── Services/
+│   │   └── ServiceBusConsumerService.cs   # Service Bus consumer implementation
+│   ├── Helpers/
+│   │   └── DisplayHelper.cs        # Display utilities for received data
+│   ├── appsettings.json            # Consumer app configuration
+│   └── README.md                   # Client app documentation
+└── LDAP-Test.sln                   # Solution file (contains both projects)
 ```
 
 ## ⚙️ **Configuration**
 
-### **appsettings.json**
+### **LDAP Console App - appsettings.json**
 ```json
 {
   "LdapSettings": {
@@ -78,6 +109,22 @@ LDAPConsoleApp/
   "ServiceBusSettings": {
     "ConnectionString": "Endpoint=sb://your-servicebus-namespace.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=your-key",
     "QueueName": "ldap-data-queue"
+  }
+}
+```
+
+### **Client Console App - appsettings.json**
+```json
+{
+  "ServiceBusSettings": {
+    "ConnectionString": "Endpoint=sb://your-servicebus-namespace.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=your-key",
+    "QueueName": "ldap-data-queue"
+  },
+  "AppSettings": {
+    "MaxRetries": 3,
+    "DelayBetweenRetries": 5000,
+    "LogReceivedMessages": true,
+    "ProcessingTimeout": 30000
   }
 }
 ```
@@ -104,13 +151,13 @@ The application now supports querying multiple groups in two ways:
 ## 🚀 **Quick Start**
 
 ### Prerequisites
-- Windows environment with domain access
 - .NET 9.0 runtime
-- Access to configured AD infrastructure
+- Access to Azure Service Bus namespace (for both applications)
+- Windows environment with domain access (for LDAP Console App only)
 
-### Running the Application
+### Running the LDAP Console App (Data Producer)
 ```bash
-# Navigate to project directory
+# Navigate to LDAP project directory
 cd LDAPConsoleApp
 
 # Build the project
@@ -118,6 +165,28 @@ dotnet build
 
 # Run the application
 dotnet run
+```
+
+### Running the Client Console App (Data Consumer)
+```bash
+# Navigate to Client project directory
+cd ClientConsoleApp
+
+# Build the project
+dotnet build
+
+# Run the application
+dotnet run
+```
+
+### Building Both Applications
+```bash
+# Build entire solution
+dotnet build
+
+# Or build specific projects
+dotnet build LDAPConsoleApp/LDAPConsoleApp.csproj
+dotnet build ClientConsoleApp/ClientConsoleApp.csproj
 ```
 
 ## 🛠️ **Dependencies**
