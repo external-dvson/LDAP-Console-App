@@ -9,6 +9,7 @@ namespace LDAPConsoleApp.Interfaces
         bool ConnectToSpecificDomainQuiet(string domain);
         List<Dictionary<string, object?>> GetAllGroups(int maxResults = 100);
         List<Dictionary<string, object?>> GetGroupsByName(string searchPattern, int maxResults = 50);
+        List<Dictionary<string, object?>> GetGroupsByPrefix(string prefix, int maxResults = 50);
         List<Dictionary<string, object?>> SearchUsers(string searchPattern, int maxResults = 50);
         Dictionary<string, object?>? GetGroupDetails(string groupName);
         List<Dictionary<string, object?>> GetGroupMembers(string groupName);

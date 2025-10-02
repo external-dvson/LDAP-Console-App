@@ -15,6 +15,7 @@ namespace LDAPConsoleApp
             public const string FoundUsersMatching = "✅ Found {0} users matching '{1}'";
             public const string ErrorSearchingGroups = "❌ Error searching groups: {0}";
             public const string ErrorSearchingGroupsByName = "❌ Error searching groups by name: {0}";
+            public const string ErrorSearchingGroupsByPrefix = "❌ Error searching groups by prefix: {0}";
             public const string ErrorSearchingUsers = "❌ Error searching users: {0}";
             public const string NoGroupsToDisplay = "❌ No groups to display";
             public const string DisplayingGroups = "\n📋 Displaying {0} groups:";
@@ -73,6 +74,7 @@ namespace LDAPConsoleApp
         {
             public const string GroupObjectClass = "(objectClass=group)";
             public const string GroupByName = "(&(objectClass=group)(cn={0}))";
+            public const string GroupByPrefix = "(&(objectClass=group)(cn={0}*))";
             public const string UserSearch = "(&(objectClass=user)(objectCategory=person)(|(cn={0})(sAMAccountName={0})(displayName={0})))";
         }
 

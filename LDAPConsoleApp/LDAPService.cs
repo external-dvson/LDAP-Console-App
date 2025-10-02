@@ -169,6 +169,48 @@ namespace LDAPConsoleApp
             }
         }
 
+        public List<Dictionary<string, object?>> GetGroupsByPrefix(string prefix, int maxResults = 50)
+        {
+            var groups = new List<Dictionary<string, object?>>();
+            
+            if (_directoryEntry == null)
+            {
+                DisplayHelper.DisplayNotConnectedError();
+                return groups;
+            }
+
+            try
+            {
+                using var searcher = new DirectorySearcher(_directoryEntry);
+                var properties = new[] { 
+                    CommonConstant.LdapProperties.CommonName,
+                    CommonConstant.LdapProperties.DistinguishedName,
+                    CommonConstant.LdapProperties.Description,
+                    CommonConstant.LdapProperties.DisplayName,
+                    CommonConstant.LdapProperties.Member
+                };
+
+                var filter = string.Format(CommonConstant.LdapFilters.GroupByPrefix, prefix);
+                LdapHelper.SetupDirectorySearcher(searcher, filter, properties, maxResults);
+
+                var results = searcher.FindAll();
+                
+                foreach (SearchResult result in results)
+                {
+                    var group = LdapHelper.CreatePropertyDictionary(result, properties);
+                    groups.Add(group);
+                }
+                
+                DisplayHelper.DisplayGroupsFoundWithPattern(groups.Count, $"{prefix}*");
+                return groups;
+            }
+            catch (Exception ex)
+            {
+                DisplayHelper.DisplayError("searching groups by prefix", ex.Message);
+                return groups;
+            }
+        }
+
         public List<Dictionary<string, object?>> SearchUsers(string searchPattern, int maxResults = 50)
         {
             var users = new List<Dictionary<string, object?>>();

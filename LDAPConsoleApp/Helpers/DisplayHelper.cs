@@ -49,6 +49,7 @@ namespace LDAPConsoleApp.Helpers
             {
                 "searching groups" => CommonConstant.Messages.ErrorSearchingGroups,
                 "searching groups by name" => CommonConstant.Messages.ErrorSearchingGroupsByName,
+                "searching groups by prefix" => CommonConstant.Messages.ErrorSearchingGroupsByPrefix,
                 "searching users" => CommonConstant.Messages.ErrorSearchingUsers,
                 "getting group details" => CommonConstant.Messages.ErrorGettingGroupDetails,
                 "getting group members" => CommonConstant.Messages.ErrorGettingGroupMembers,

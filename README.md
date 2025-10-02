@@ -56,6 +56,12 @@ LDAPConsoleApp/
     "Domain": "APAC.bosch.com",
     "SecondaryDomain": "DE.bosch.com",
     "DefaultGroupName": "IdM2BCD_FCMCONSOLE_TRANSPORT_ADMIN",
+    "GroupNames": [
+      "IdM2BCD_FCMCONSOLE_TRANSPORT_ADMIN",
+      "IdM2BCD_FCMCONSOLE_USER_ADMIN",
+      "IdM2BCD_FCMCONSOLE_READ_ONLY"
+    ],
+    "GroupPrefix": "IdM2BCD_FCMCONSOLE_",
     "MaxResults": 50,
     "MaxGroupResults": 100,
     "MaxDisplayItems": 10
@@ -66,10 +72,17 @@ LDAPConsoleApp/
 ### **Configuration Options:**
 - **Domain**: Primary LDAP domain
 - **SecondaryDomain**: Secondary domain for testing
-- **DefaultGroupName**: Target group for queries
+- **DefaultGroupName**: Legacy single group name (maintained for compatibility)
+- **GroupNames**: Array of specific group names to query
+- **GroupPrefix**: Prefix to search for all related groups (e.g., FCMConsole modules)
 - **MaxResults**: Maximum search results limit
 - **MaxGroupResults**: Maximum group results limit
 - **MaxDisplayItems**: Maximum items to display
+
+### **Enhanced Multi-Group Support:**
+The application now supports querying multiple groups in two ways:
+1. **Specific Groups**: Configure exact group names in `GroupNames` array
+2. **Prefix-based Discovery**: Use `GroupPrefix` to find all groups with a common prefix (ideal for discovering all FCMConsole module groups)
 
 ## 🚀 **Quick Start**
 
@@ -124,9 +137,21 @@ ldapService.ConnectToSpecificDomain("DE.bosch.com")
 ## 🔧 **Key Components**
 
 ### **Core Services:**
-- **ILdapService**: Main LDAP operations interface
+- **ILdapService**: Main LDAP operations interface with enhanced group query methods
+  - `GetGroupsByName()`: Query specific group by exact name
+  - `GetGroupsByPrefix()`: Discover all groups with common prefix
+  - `GetGroupDetails()` & `GetGroupMembers()`: Detailed group information
 - **LDAPService**: LDAP operations implementation
-- **LDAPTest**: Test execution and orchestration
+- **LDAPTest**: Test execution and orchestration with multi-group support
+
+### **Enhanced Group Query Methods:**
+```csharp
+// Query specific groups by name
+var groups = ldapService.GetGroupsByName("IdM2BCD_FCMCONSOLE_TRANSPORT_ADMIN");
+
+// Discover all groups with prefix (ideal for FCMConsole modules)
+var allGroups = ldapService.GetGroupsByPrefix("IdM2BCD_FCMCONSOLE_");
+```
 
 ### **Helper Classes:**
 - **LdapHelper**: LDAP utility functions and data processing
@@ -134,7 +159,7 @@ ldapService.ConnectToSpecificDomain("DE.bosch.com")
 - **CommonConstant**: Centralized constants, messages, and configuration keys
 
 ### **Configuration:**
-- **LdapSettings**: Strongly-typed configuration model
+- **LdapSettings**: Strongly-typed configuration model with multi-group support
 - **Options Pattern**: Dependency injection of configuration
 
 ## 📊 **Sample Output**
@@ -185,14 +210,33 @@ telnet DE.bosch.com 389
 ## 📈 **Extending the Tool**
 
 ### **Adding New Groups:**
-1. Modify `DefaultGroupName` in `appsettings.json`
-2. Or inject different group names via configuration
+1. **Specific Groups**: Add to `GroupNames` array in `appsettings.json`
+   ```json
+   "GroupNames": [
+     "IdM2BCD_FCMCONSOLE_TRANSPORT_ADMIN",
+     "IdM2BCD_FCMCONSOLE_USER_ADMIN",
+     "IdM2BCD_FCMCONSOLE_YOUR_NEW_MODULE"
+   ]
+   ```
+2. **Prefix-based Discovery**: Update `GroupPrefix` to discover related groups automatically
+   ```json
+   "GroupPrefix": "IdM2BCD_FCMCONSOLE_"
+   ```
 
 ### **Supporting New Domains:**
 1. Update `LdapSettings` configuration
 2. Add domain-specific logic if needed
 
 ### **Adding More User Properties:**
+1. Extend `LdapHelper.GetMemberDetails()` method
+2. Update `DisplayHelper.DisplayGroupMembers()` display logic
+
+### **Multi-Module Support:**
+The application now supports enterprise scenarios with multiple FCMConsole modules:
+- **Transport Module**: `IdM2BCD_FCMCONSOLE_TRANSPORT_ADMIN`
+- **User Management**: `IdM2BCD_FCMCONSOLE_USER_ADMIN`  
+- **Read-Only Access**: `IdM2BCD_FCMCONSOLE_READ_ONLY`
+- **Automatic Discovery**: Use prefix search to find all related groups
 1. Extend `LdapHelper.GetMemberDetails()` method
 2. Update `DisplayHelper.DisplayGroupMembers()` display logic
 
