@@ -15,6 +15,8 @@ This application connects to Active Directory to query groups and retrieve detai
 - ✅ **Configuration Management** - Options pattern with appsettings.json
 - ✅ **Dependency Injection** - Modern .NET DI container
 - ✅ **Error Handling** - Comprehensive exception management
+- ✅ **Azure Service Bus Integration** - Send LDAP data to Azure Service Bus queue
+- ✅ **Group/User Data Models** - Structured data models for group and user information
 
 ## 🏗️ **Architecture & Design Principles**
 
@@ -36,9 +38,17 @@ LDAPConsoleApp/
 ├── Program.cs                    # Application entry point with DI setup
 ├── CommonConstant.cs             # Centralized constants and messages
 ├── Configuration/
-│   └── LdapSettings.cs          # Configuration model
+│   └── LdapSettings.cs          # Configuration model (LDAP + Service Bus)
 ├── Interfaces/
-│   └── ILdapService.cs          # LDAP service contract
+│   ├── ILdapService.cs          # LDAP service contract
+│   ├── IServiceBusService.cs    # Service Bus service contract
+│   └── ILdapServiceBusOrchestrator.cs  # Orchestrator contract
+├── Models/
+│   ├── Group.cs                 # Group data model (GroupName + Users)
+│   └── User.cs                  # User data model (DomainId)
+├── Services/
+│   ├── ServiceBusService.cs     # Azure Service Bus implementation
+│   └── LdapServiceBusOrchestrator.cs  # LDAP to Service Bus orchestration
 ├── Helpers/
 │   ├── LdapHelper.cs            # LDAP utility functions
 │   └── DisplayHelper.cs         # UI display utilities
@@ -64,11 +74,16 @@ LDAPConsoleApp/
     "MaxResults": 50,
     "MaxGroupResults": 100,
     "MaxDisplayItems": 10
+  },
+  "ServiceBusSettings": {
+    "ConnectionString": "Endpoint=sb://your-servicebus-namespace.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=your-key",
+    "QueueName": "ldap-data-queue"
   }
 }
 ```
 
 ### **Configuration Options:**
+**LDAP Settings:**
 - **Domain**: Primary LDAP domain
 - **SecondaryDomain**: Secondary domain for testing
 - **GroupNames**: Array of specific group names to query
@@ -76,6 +91,10 @@ LDAPConsoleApp/
 - **MaxResults**: Maximum search results limit
 - **MaxGroupResults**: Maximum group results limit
 - **MaxDisplayItems**: Maximum items to display
+
+**Service Bus Settings:**
+- **ConnectionString**: Azure Service Bus connection string
+- **QueueName**: Name of the queue to send LDAP data to
 
 ### **Enhanced Multi-Group Support:**
 The application now supports querying multiple groups in two ways:
@@ -108,6 +127,43 @@ dotnet run
 - **Microsoft.Extensions.Configuration** (8.0.0)
 - **Microsoft.Extensions.DependencyInjection** (8.0.0)
 - **Microsoft.Extensions.Options** (8.0.0)
+- **Azure.Messaging.ServiceBus** (7.18.2)
+
+## 🔄 **Azure Service Bus Integration**
+
+### **Data Models:**
+- **Group**: Contains `GroupName` and collection of `User` objects (1-to-many relationship)
+- **User**: Contains `DomainId` field for user identification
+
+### **Service Bus Workflow:**
+1. **LDAP Query**: Retrieve groups and their members from configured AD domains
+2. **Data Transformation**: Convert LDAP data to Group/User model objects
+3. **Message Creation**: Serialize groups with their users to JSON format
+4. **Queue Delivery**: Send structured messages to Azure Service Bus queue
+
+### **Message Format:**
+```json
+{
+  "messageType": "Group",
+  "timestamp": "2024-12-19T10:00:00Z",
+  "data": {
+    "groupName": "IdM2BCD_FCMCONSOLE_TRANSPORT_ADMIN",
+    "users": [
+      {
+        "domainId": "user1"
+      },
+      {
+        "domainId": "user2"
+      }
+    ]
+  }
+}
+```
+
+### **Service Configuration:**
+Configure your Azure Service Bus settings in `appsettings.json`:
+- Update `ConnectionString` with your Service Bus namespace connection string
+- Set `QueueName` to your target queue name
 
 ## 🔐 **Security & Authentication**
 
@@ -142,6 +198,15 @@ ldapService.ConnectToSpecificDomain("DE.bosch.com")
 - **LDAPService**: LDAP operations implementation
 - **LDAPTest**: Test execution and orchestration with multi-group support
 
+### **Service Bus Services:**
+- **IServiceBusService**: Azure Service Bus operations interface
+  - `ConnectAsync()`: Establish connection to Service Bus
+  - `SendGroupMessageAsync()`: Send group data as JSON message to queue
+  - `DisconnectAsync()`: Clean up Service Bus resources
+- **ServiceBusService**: Service Bus operations implementation
+- **ILdapServiceBusOrchestrator**: Orchestration interface for LDAP to Service Bus workflow
+- **LdapServiceBusOrchestrator**: Coordinates LDAP queries and Service Bus messaging
+
 ### **Enhanced Group Query Methods:**
 ```csharp
 // Query specific groups by name
@@ -158,6 +223,7 @@ var allGroups = ldapService.GetGroupsByPrefix("IdM2BCD_FCMCONSOLE_");
 
 ### **Configuration:**
 - **LdapSettings**: Strongly-typed configuration model with multi-group support
+- **ServiceBusSettings**: Configuration for Azure Service Bus connection and queue
 - **Options Pattern**: Dependency injection of configuration
 
 ## 📊 **Sample Output**
