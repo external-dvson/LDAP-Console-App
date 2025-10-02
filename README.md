@@ -55,7 +55,6 @@ LDAPConsoleApp/
   "LdapSettings": {
     "Domain": "APAC.bosch.com",
     "SecondaryDomain": "DE.bosch.com",
-    "DefaultGroupName": "IdM2BCD_FCMCONSOLE_TRANSPORT_ADMIN",
     "GroupNames": [
       "IdM2BCD_FCMCONSOLE_TRANSPORT_ADMIN",
       "IdM2BCD_FCMCONSOLE_USER_ADMIN",
@@ -72,7 +71,6 @@ LDAPConsoleApp/
 ### **Configuration Options:**
 - **Domain**: Primary LDAP domain
 - **SecondaryDomain**: Secondary domain for testing
-- **DefaultGroupName**: Legacy single group name (maintained for compatibility)
 - **GroupNames**: Array of specific group names to query
 - **GroupPrefix**: Prefix to search for all related groups (e.g., FCMConsole modules)
 - **MaxResults**: Maximum search results limit
