@@ -1,4 +1,6 @@
 using System;
+using System.Threading.Tasks;
+using System.Linq;
 using Microsoft.Extensions.Options;
 using LDAPConsoleApp.Interfaces;
 using LDAPConsoleApp.Configuration;
@@ -10,6 +12,7 @@ namespace LDAPConsoleApp
     {
         private readonly ILdapService _ldapService;
         private readonly LdapSettings _settings;
+        private static readonly object _ldapLock = new object();
 
         public LDAPTest(ILdapService ldapService, IOptions<LdapSettings> settings)
         {
@@ -19,90 +22,206 @@ namespace LDAPConsoleApp
 
         public void RunTest()
         {
-            // Test individual groups from configuration
-            foreach (var groupName in _settings.GroupNames)
+            // Option 1: Async Parallel (current implementation)
+            Console.WriteLine("🔄 Testing individual groups with async parallel...");
+            RunTestAsync().GetAwaiter().GetResult();
+        }
+
+        public async Task RunTestAsync()
+        {
+            // Test individual groups from configuration in parallel
+            var groupTasks = _settings.GroupNames.Select(async groupName =>
             {
                 Console.WriteLine($"\n=== Testing Individual Group: {groupName} ===");
-                TestDomainGroup(_settings.SecondaryDomain, groupName);
-            }
+                await TestDomainGroupAsync(_settings.SecondaryDomain, groupName);
+            });
+
+            await Task.WhenAll(groupTasks);
 
             // Test groups by prefix to discover all FCMConsole groups
             Console.WriteLine($"\n=== Testing Groups by Prefix: {_settings.GroupPrefix} ===");
-            TestGroupsByPrefix(_settings.SecondaryDomain, _settings.GroupPrefix);
+            await TestGroupsByPrefixAsync(_settings.SecondaryDomain, _settings.GroupPrefix);
         }
 
-        public void TestDomainGroup(string domain, string groupName)
+        // Alternative: Parallel.ForEach approach for comparison
+        public void RunTestParallel()
         {
-            try
+            Console.WriteLine("🔄 Testing individual groups with Parallel.ForEach...");
+            
+            // Test individual groups from configuration in parallel
+            System.Threading.Tasks.Parallel.ForEach(_settings.GroupNames, groupName =>
             {
-                if (_ldapService.ConnectToSpecificDomainQuiet(domain))
-                {
-                    var groupDetails = _ldapService.GetGroupDetails(groupName);
-                    if (groupDetails != null)
-                    {
-                        var members = _ldapService.GetGroupMembers(groupName);
-                        _ldapService.ShowGroupMembers(members);
-                    }
-                    else
-                    {
-                        DisplayHelper.DisplayGroupNotFoundInDomain(domain, groupName);
-                    }
-                    
-                    _ldapService.Disconnect();
-                }
-                else
-                {
-                    DisplayHelper.DisplayCouldNotConnectToDomain(domain);
-                }
-            }
-            catch (Exception ex)
-            {
-                DisplayHelper.DisplayDomainTestError(domain, ex.Message);
-            }
+                Console.WriteLine($"\n=== Testing Individual Group: {groupName} ===");
+                TestDomainGroupSync(_settings.SecondaryDomain, groupName);
+            });
+
+            // Test groups by prefix to discover all FCMConsole groups
+            Console.WriteLine($"\n=== Testing Groups by Prefix: {_settings.GroupPrefix} ===");
+            TestGroupsByPrefixSync(_settings.SecondaryDomain, _settings.GroupPrefix);
         }
 
-        public void TestGroupsByPrefix(string domain, string prefix)
+        public async Task TestDomainGroupAsync(string domain, string groupName)
         {
-            try
+            await Task.Run(() =>
             {
-                if (_ldapService.ConnectToSpecificDomainQuiet(domain))
+                lock (_ldapLock) // Synchronize LDAP operations
                 {
-                    Console.WriteLine($"Searching for groups with prefix '{prefix}' in domain '{domain}'...");
-                    var groups = _ldapService.GetGroupsByPrefix(prefix, _settings.MaxGroupResults);
-                    
-                    if (groups.Count > 0)
+                    try
                     {
-                        Console.WriteLine($"\nFound {groups.Count} groups with prefix '{prefix}':");
-                        _ldapService.ShowGroups(groups, _settings.MaxDisplayItems);
-                        
-                        // Show members for the first group as an example
-                        if (groups.Count > 0)
+                        if (_ldapService.ConnectToSpecificDomainQuiet(domain))
                         {
-                            var firstGroup = groups[0];
-                            var firstGroupName = firstGroup.GetValueOrDefault(CommonConstant.LdapProperties.CommonName)?.ToString();
-                            if (!string.IsNullOrEmpty(firstGroupName))
+                            var groupDetails = _ldapService.GetGroupDetails(groupName);
+                            if (groupDetails != null)
                             {
-                                Console.WriteLine($"\n=== Example: Members of {firstGroupName} ===");
-                                var members = _ldapService.GetGroupMembers(firstGroupName);
+                                var members = _ldapService.GetGroupMembers(groupName);
                                 _ldapService.ShowGroupMembers(members);
                             }
+                            else
+                            {
+                                DisplayHelper.DisplayGroupNotFoundInDomain(domain, groupName);
+                            }
+                            
+                            _ldapService.Disconnect();
                         }
+                        else
+                        {
+                            DisplayHelper.DisplayCouldNotConnectToDomain(domain);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        DisplayHelper.DisplayDomainTestError(domain, ex.Message);
+                    }
+                }
+            });
+        }
+
+        public async Task TestGroupsByPrefixAsync(string domain, string prefix)
+        {
+            await Task.Run(() =>
+            {
+                try
+                {
+                    if (_ldapService.ConnectToSpecificDomainQuiet(domain))
+                    {
+                        Console.WriteLine($"Searching for groups with prefix '{prefix}' in domain '{domain}'...");
+                        var groups = _ldapService.GetGroupsByPrefix(prefix, _settings.MaxGroupResults);
+                        
+                        if (groups.Count > 0)
+                        {
+                            Console.WriteLine($"\nFound {groups.Count} groups with prefix '{prefix}':");
+                            _ldapService.ShowGroups(groups, _settings.MaxDisplayItems);
+                            
+                            // Show members for the first group as an example
+                            if (groups.Count > 0)
+                            {
+                                var firstGroup = groups[0];
+                                var firstGroupName = firstGroup.GetValueOrDefault(CommonConstant.LdapProperties.CommonName)?.ToString();
+                                if (!string.IsNullOrEmpty(firstGroupName))
+                                {
+                                    Console.WriteLine($"\n=== Example: Members of {firstGroupName} ===");
+                                    var members = _ldapService.GetGroupMembers(firstGroupName);
+                                    _ldapService.ShowGroupMembers(members);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"No groups found with prefix '{prefix}' in domain '{domain}'");
+                        }
+                        
+                        _ldapService.Disconnect();
                     }
                     else
                     {
-                        Console.WriteLine($"No groups found with prefix '{prefix}' in domain '{domain}'");
+                        DisplayHelper.DisplayCouldNotConnectToDomain(domain);
                     }
-                    
-                    _ldapService.Disconnect();
                 }
-                else
+                catch (Exception ex)
                 {
-                    DisplayHelper.DisplayCouldNotConnectToDomain(domain);
+                    DisplayHelper.DisplayDomainTestError(domain, ex.Message);
+                }
+            });
+        }
+
+        public void TestDomainGroupSync(string domain, string groupName)
+        {
+            lock (_ldapLock) // Synchronize LDAP operations for thread safety
+            {
+                try
+                {
+                    if (_ldapService.ConnectToSpecificDomainQuiet(domain))
+                    {
+                        var groupDetails = _ldapService.GetGroupDetails(groupName);
+                        if (groupDetails != null)
+                        {
+                            var members = _ldapService.GetGroupMembers(groupName);
+                            _ldapService.ShowGroupMembers(members);
+                        }
+                        else
+                        {
+                            DisplayHelper.DisplayGroupNotFoundInDomain(domain, groupName);
+                        }
+                        
+                        _ldapService.Disconnect();
+                    }
+                    else
+                    {
+                        DisplayHelper.DisplayCouldNotConnectToDomain(domain);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    DisplayHelper.DisplayDomainTestError(domain, ex.Message);
                 }
             }
-            catch (Exception ex)
+        }
+
+        public void TestGroupsByPrefixSync(string domain, string prefix)
+        {
+            lock (_ldapLock) // Synchronize LDAP operations for thread safety
             {
-                DisplayHelper.DisplayDomainTestError(domain, ex.Message);
+                try
+                {
+                    if (_ldapService.ConnectToSpecificDomainQuiet(domain))
+                    {
+                        Console.WriteLine($"Searching for groups with prefix '{prefix}' in domain '{domain}'...");
+                        var groups = _ldapService.GetGroupsByPrefix(prefix, _settings.MaxGroupResults);
+                        
+                        if (groups.Count > 0)
+                        {
+                            Console.WriteLine($"\nFound {groups.Count} groups with prefix '{prefix}':");
+                            _ldapService.ShowGroups(groups, _settings.MaxDisplayItems);
+                            
+                            // Show members for the first group as an example
+                            if (groups.Count > 0)
+                            {
+                                var firstGroup = groups[0];
+                                var firstGroupName = firstGroup.GetValueOrDefault(CommonConstant.LdapProperties.CommonName)?.ToString();
+                                if (!string.IsNullOrEmpty(firstGroupName))
+                                {
+                                    Console.WriteLine($"\n=== Example: Members of {firstGroupName} ===");
+                                    var members = _ldapService.GetGroupMembers(firstGroupName);
+                                    _ldapService.ShowGroupMembers(members);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"No groups found with prefix '{prefix}' in domain '{domain}'");
+                        }
+                        
+                        _ldapService.Disconnect();
+                    }
+                    else
+                    {
+                        DisplayHelper.DisplayCouldNotConnectToDomain(domain);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    DisplayHelper.DisplayDomainTestError(domain, ex.Message);
+                }
             }
         }
     }
