@@ -1,4 +1,9 @@
 ﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using LDAPConsoleApp.Configuration;
+using LDAPConsoleApp.Interfaces;
+using LDAPConsoleApp.Helpers;
 
 namespace LDAPConsoleApp
 {
@@ -6,19 +11,32 @@ namespace LDAPConsoleApp
     {
         static void Main(string[] args)
         {
+            var serviceCollection = new ServiceCollection();
+            ConfigureServices(serviceCollection);
+            
+            var serviceProvider = serviceCollection.BuildServiceProvider();
+            var settings = serviceProvider.GetRequiredService<IOptions<LdapSettings>>();
+
+            DisplayHelper.DisplayApplicationHeader(
+                settings.Value.Domain,
+                Environment.UserDomainName,
+                Environment.UserName
+            );
+
+            var testRunner = serviceProvider.GetRequiredService<LDAPTest>();
+            testRunner.RunTest();
+        }
+
+        private static void ConfigureServices(ServiceCollection services)
+        {
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .AddJsonFile(CommonConstant.Configuration.AppSettingsFile, optional: false, reloadOnChange: true)
                 .Build();
 
-            var domain = configuration["LdapSettings:Domain"] ?? "APAC.bosch.com";
-
-            Console.WriteLine(" LDAP Console Application với Windows Authentication");
-            Console.WriteLine($"   Domain: {domain}");
-            Console.WriteLine($"   Current User: {Environment.UserDomainName}\\{Environment.UserName}");
-            Console.WriteLine();
-
-            LDAPTest.RunTest();
+            services.Configure<LdapSettings>(configuration.GetSection(CommonConstant.Configuration.LdapSettingsSection));
+            services.AddScoped<ILdapService, LDAPService>();
+            services.AddScoped<LDAPTest>();
         }
     }
 }
