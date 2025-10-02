@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using LDAPConsoleApp.Configuration;
 using LDAPConsoleApp.Interfaces;
 using LDAPConsoleApp.Helpers;
+using LDAPConsoleApp.Services;
 
 namespace LDAPConsoleApp
 {
@@ -35,7 +36,10 @@ namespace LDAPConsoleApp
                 .Build();
 
             services.Configure<LdapSettings>(configuration.GetSection(CommonConstant.Configuration.LdapSettingsSection));
+            services.Configure<ServiceBusSettings>(configuration.GetSection(CommonConstant.Configuration.ServiceBusSettingsSection));
             services.AddScoped<ILdapService, LDAPService>();
+            services.AddScoped<IServiceBusService, ServiceBusService>();
+            services.AddScoped<ILdapServiceBusOrchestrator, LdapServiceBusOrchestrator>();
             services.AddScoped<LDAPTest>();
         }
     }

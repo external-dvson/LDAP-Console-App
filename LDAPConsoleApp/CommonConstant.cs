@@ -34,6 +34,12 @@ namespace LDAPConsoleApp
             public const string DomainLabel = "   Domain: {0}";
             public const string CurrentUserLabel = "   Current User: {0}\\{1}";
             public const string AndMoreGroups = "  ... và {0} groups khác";
+            public const string ServiceBusConnectionSuccess = "✅ Connected to Service Bus: {0}";
+            public const string ServiceBusConnectionFailed = "❌ Service Bus connection failed: {0}";
+            public const string MessageSentToQueue = "✅ Message sent to queue '{0}': {1}";
+            public const string ErrorSendingMessage = "❌ Error sending message to queue: {0}";
+            public const string ProcessingGroupsForServiceBus = "🔄 Processing groups for Service Bus...";
+            public const string SendingGroupToServiceBus = "📤 Sending group '{0}' with {1} users to Service Bus...";
         }
 
         public static class Icons
@@ -53,6 +59,9 @@ namespace LDAPConsoleApp
             public const string Title = "💼";
             public const string Department = "🏢";
             public const string List = "📋";
+            public const string ServiceBus = "🚌";
+            public const string Queue = "📤";
+            public const string Processing = "🔄";
         }
 
         public static class LdapProperties
@@ -95,6 +104,7 @@ namespace LDAPConsoleApp
         public static class Configuration
         {
             public const string LdapSettingsSection = "LdapSettings";
+            public const string ServiceBusSettingsSection = "ServiceBusSettings";
             public const string AppSettingsFile = "appsettings.json";
         }
     }
