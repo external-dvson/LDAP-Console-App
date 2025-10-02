@@ -4,9 +4,10 @@ A modern, well-structured LDAP query tool designed for Active Directory operatio
 
 ## 📋 **Project Overview**
 
-This solution contains two applications:
+This solution contains three applications:
 1. **LDAPConsoleApp** - Connects to Active Directory to query groups and send data to Azure Service Bus
 2. **ClientConsoleApp** - Independent consumer that receives and processes LDAP data from Azure Service Bus
+3. **ClientAzureFunction** - Serverless Azure Function (.NET 8 Isolated) variant that processes Service Bus messages using triggers
 
 The codebase has been refactored following modern .NET practices and SOLID principles.
 
@@ -23,6 +24,13 @@ The codebase has been refactored following modern .NET practices and SOLID princ
 - ✅ **Cloud-Ready** - Designed for Azure deployment
 - ✅ **Real-time Processing** - Processes messages as they arrive
 - ✅ **Independent Deployment** - No LDAP dependencies
+
+### **Client Azure Function:**
+- ✅ **Serverless Processing** - Event-driven Azure Function with Service Bus triggers
+- ✅ **Auto-scaling** - Automatically scales based on queue load
+- ✅ **.NET 8 Isolated** - Latest Azure Functions runtime with .NET 8
+- ✅ **Cost-effective** - Pay-per-execution model
+- ✅ **Zero Infrastructure** - No servers to manage
 
 ### **Common Features:**
 - ✅ **Clean Architecture** - SOLID principles implementation
@@ -179,7 +187,22 @@ dotnet build
 dotnet run
 ```
 
-### Building Both Applications
+### Running the Client Azure Function (Serverless Data Consumer)
+```bash
+# Navigate to Azure Function project directory
+cd ClientAzureFunction
+
+# Install Azure Functions Core Tools (if not installed)
+npm install -g azure-functions-core-tools@4 --unsafe-perm true
+
+# Build the project
+dotnet build
+
+# Run the Azure Function locally
+func start
+```
+
+### Building All Applications
 ```bash
 # Build entire solution
 dotnet build
@@ -187,6 +210,7 @@ dotnet build
 # Or build specific projects
 dotnet build LDAPConsoleApp/LDAPConsoleApp.csproj
 dotnet build ClientConsoleApp/ClientConsoleApp.csproj
+dotnet build ClientAzureFunction/ClientAzureFunction.csproj
 ```
 
 ## 🛠️ **Dependencies**

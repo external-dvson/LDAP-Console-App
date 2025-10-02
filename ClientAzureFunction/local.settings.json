@@ -1,0 +1,13 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "ServiceBusSettings__ConnectionString": "Endpoint=sb://your-servicebus-namespace.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=your-key",
+    "ServiceBusSettings__QueueName": "ldap-data-queue",
+    "AppSettings__MaxRetries": "3",
+    "AppSettings__DelayBetweenRetries": "5000",
+    "AppSettings__LogReceivedMessages": "true",
+    "AppSettings__ProcessingTimeout": "30000"
+  }
+}
