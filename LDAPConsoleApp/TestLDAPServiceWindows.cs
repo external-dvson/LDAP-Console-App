@@ -11,12 +11,14 @@ namespace LDAPConsoleApp
     public class LDAPTest
     {
         private readonly ILdapService _ldapService;
+        private readonly ILdapServiceBusOrchestrator _serviceBusOrchestrator;
         private readonly LdapSettings _settings;
         private static readonly object _ldapLock = new object();
 
-        public LDAPTest(ILdapService ldapService, IOptions<LdapSettings> settings)
+        public LDAPTest(ILdapService ldapService, ILdapServiceBusOrchestrator serviceBusOrchestrator, IOptions<LdapSettings> settings)
         {
             _ldapService = ldapService;
+            _serviceBusOrchestrator = serviceBusOrchestrator;
             _settings = settings.Value;
         }
 
@@ -25,6 +27,23 @@ namespace LDAPConsoleApp
             // Option 1: Async Parallel (current implementation)
             Console.WriteLine("🔄 Testing individual groups with async parallel...");
             RunTestAsync().GetAwaiter().GetResult();
+
+            // Option 2: Send LDAP data to Service Bus
+            Console.WriteLine("\n🚌 Sending LDAP data to Azure Service Bus...");
+            RunServiceBusTest().GetAwaiter().GetResult();
+        }
+
+        public async Task RunServiceBusTest()
+        {
+            try
+            {
+                await _serviceBusOrchestrator.ProcessGroupsAndSendToServiceBusAsync();
+                Console.WriteLine("✅ Service Bus operations completed successfully");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Service Bus operation failed: {ex.Message}");
+            }
         }
 
         public async Task RunTestAsync()
